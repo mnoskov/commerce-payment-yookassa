@@ -61,6 +61,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                 'payment_id'   => $payment['id'],
                 'payment_hash' => $payment['hash'],
             ],
+            'capture' => true,
         ];
 
         if (!empty($fields['phone']) || !empty($fields['email'])) {
