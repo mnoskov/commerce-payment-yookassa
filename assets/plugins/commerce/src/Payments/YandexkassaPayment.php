@@ -4,12 +4,10 @@ namespace Commerce\Payments;
 
 class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 {
-    public function init()
+    public function __construct($modx, array $params = [])
     {
-        return [
-            'code'  => 'yandexkassa',
-            'title' => $this->lang['payments.yandexkassa_title'],
-        ];
+        parent::__construct($modx, $params);
+        $this->lang = $modx->commerce->getUserLanguage('yandexkassa');
     }
 
     public function getMarkup()
@@ -17,11 +15,11 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         $out = [];
 
         if (empty($this->getSetting('shop_id'))) {
-            $out[] = $this->lang['payments.error_empty_shop_id'];
+            $out[] = $this->lang['yandexkassa.error_empty_shop_id'];
         }
 
         if (empty($this->getSetting('secret'))) {
-            $out[] = $this->lang['payments.error_empty_secret'];
+            $out[] = $this->lang['yandexkassa.error_empty_secret'];
         }
 
         $out = implode('<br>', $out);
