@@ -62,7 +62,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             'capture' => true,
         ];
 
-        if (!empty($fields['phone']) || !empty($fields['email'])) {
+        if (!empty($order['phone']) || !empty($order['email'])) {
             $receipt = ['items' => []];
 
             foreach ($processor->getCart()->getItems() as $item) {
@@ -77,10 +77,11 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                 ];
             }
 
-            if (!empty($fields['email']) && filter_var($fields['email'], FILTER_VALIDATE_EMAIL)) {
-                $receipt['email'] = $fields['email'];
-            } elseif (!empty($fields['phone'])) {
-                $receipt['phone'] = substr(preg_replace('/[^\d]+/', '', $fields['phone']), 0, 15);
+            if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+                $receipt['email'] = $order['email'];
+            }
+            if (!empty($order['phone'])) {
+                $receipt['phone'] = substr(preg_replace('/[^\d]+/', '', $order['phone']), 0, 15);
             }
 
             $data['receipt'] = $receipt;
@@ -179,7 +180,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         curl_setopt_array($curl, [
             CURLOPT_URL            => $url . $method,
             CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
-            CURLOPT_USERPWD        => "$shop_id:$secret",    
+            CURLOPT_USERPWD        => "$shop_id:$secret",
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_VERBOSE        => false,
             CURLOPT_SSL_VERIFYHOST => false,
@@ -211,7 +212,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             } else {
                 $msg = 'Server is not responding';
             }
-            
+
             $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment');
             return false;
         }
