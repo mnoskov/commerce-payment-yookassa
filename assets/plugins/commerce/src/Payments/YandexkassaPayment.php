@@ -67,7 +67,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
             foreach ($processor->getCart()->getItems() as $item) {
                 $receipt['items'][] = [
-                    'description' => mb_substr($item['title'], 0, 64),
+                    'description' => mb_substr($item['name'], 0, 64),
                     'vat_code'    => $this->getSetting('vat_code'),
                     'quantity'    => $item['count'],
                     'amount'      => [
@@ -83,6 +83,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             if (!empty($order['phone'])) {
                 $receipt['phone'] = substr(preg_replace('/[^\d]+/', '', $order['phone']), 0, 15);
             }
+            $receipt['tax_system_code'] = $this->getSetting('tax_system_code');
 
             $data['receipt'] = $receipt;
         }
@@ -130,7 +131,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
         $payment = $data['object'];
 
-        if ($payment['status'] == 'waiting_for_capture' && $payment['paid'] === true) {
+        if ($payment['status'] == 'succeeded' && $payment['paid'] === true) {
             $processor = $this->modx->commerce->loadProcessor();
 
             try {
@@ -139,10 +140,11 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                 $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment');
                 return false;
             }
-
+/*
             $this->request('payments/' . $payment['id'] . '/capture', [
                 'amount' => $payment['amount'],
             ]);
+*/
         }
 
         return true;
