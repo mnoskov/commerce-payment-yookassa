@@ -111,6 +111,8 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
     public function handleCallback()
     {
         $debug = !empty($this->getSetting('debug'));
+        $processing_sid = !empty($this->getSetting('processing_status_id')) ? $this->getSetting('processing_status_id') : 2;
+        $canceled_sid = !empty($this->getSetting('canceled_status_id')) ? $this->getSetting('canceled_status_id') : 5;
         $source = file_get_contents('php://input');
 
         if ($debug) {
@@ -130,21 +132,52 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         }
 
         $payment = $data['object'];
-
-        if ($payment['status'] == 'succeeded' && $payment['paid'] === true) {
-            $processor = $this->modx->commerce->loadProcessor();
-
-            try {
-                $processor->processPayment($payment['metadata']['payment_id'], floatval($payment['amount']['value']));
-            } catch (\Exception $e) {
-                $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment');
-                return false;
+        $processor = $this->modx->commerce->loadProcessor();
+        switch ($payment['status']) {
+            case 'succeeded': {
+                if ($payment['paid'] === true) {
+                    try {
+                      $processor->processPayment($payment['metadata']['payment_id'], floatval($payment['amount']['value']));
+                      // $this->modx->invokeEvent('OnPageNotFound', ['callback' => &$payment]); // если необходимо обработать возвращаемые данные, н-р, отправить API-запрос в CRM
+                    } catch (\Exception $e) {
+                      $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment');
+                      return false;
+                    }
+                }
+              break;
             }
-/*
-            $this->request('payments/' . $payment['id'] . '/capture', [
-                'amount' => $payment['amount'],
-            ]);
-*/
+            case 'waiting_for_capture': {
+                $this->request('payments/' . $payment['id'] . '/capture', [
+                    'amount' => $payment['amount'],
+                ]);
+                try {
+                  $processor->changeStatus($payment['metadata']['order_id'], $processing_sid, 'Оплата внесена (сумма заморожена), подтверждене о списании отправлено в Яндекс.Кассу');
+                } catch (\Exception $e) {
+                  $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment (changeStatus)');
+                  return false;
+                }
+              break;
+            }
+            case 'canceled': {
+                $party = array(
+                    'merchant' =>	'Продавец товаров и услуг',
+                    'yandex_checkout' => 'Яндекс.Касса',
+                    'payment_network' => '«Внешние» участники платежного процесса, кроме Яндекс.Кассы и продавца (например, эмитент или сторонний платежный сервис)'
+                );
+                $_party = $payment['cancellation_details']['party'];
+                $_reason = $payment['cancellation_details']['reason'];
+                $reason_url = "https://kassa.yandex.ru/developers/payments/declined-payments#cancellation-details-reason";
+                if ($debug) {
+                    $this->modx->logEvent(0, 1, 'Initiator: ' . $_party . ', Reason: ' . $_reason, 'Commerce YandexKassa Payment (payment canceled)');
+                }
+                try {
+                    $processor->changeStatus($payment['metadata']['order_id'], $canceled_sid, 'Заказ отменён со стороны: ' . $party[$_party] . '. Причина: ' . $_reason . ', подробнее: ' . $reason_url, true);
+                } catch (\Exception $e) {
+                    $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment (payment canceled error)');
+                  return false;
+                }
+              break;
+            }
         }
 
         return true;
