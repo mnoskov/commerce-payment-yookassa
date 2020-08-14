@@ -151,7 +151,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                     'amount' => $payment['amount'],
                 ]);
                 try {
-                  $processor->changeStatus($payment['metadata']['order_id'], $processing_sid, 'Оплата внесена (сумма заморожена), подтверждене о списании отправлено в Яндекс.Кассу');
+                  $processor->changeStatus($payment['metadata']['order_id'], $processing_sid, $this->lang['yandexkassa.waiting_for_capture']);
                 } catch (\Exception $e) {
                   $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment (changeStatus)');
                   return false;
@@ -159,11 +159,6 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
               break;
             }
             case 'canceled': {
-                $party = array(
-                    'merchant' =>	'Продавец товаров и услуг',
-                    'yandex_checkout' => 'Яндекс.Касса',
-                    'payment_network' => '«Внешние» участники платежного процесса, кроме Яндекс.Кассы и продавца (например, эмитент или сторонний платежный сервис)'
-                );
                 $_party = $payment['cancellation_details']['party'];
                 $_reason = $payment['cancellation_details']['reason'];
                 $reason_url = "https://kassa.yandex.ru/developers/payments/declined-payments#cancellation-details-reason";
@@ -171,7 +166,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                     $this->modx->logEvent(0, 1, 'Initiator: ' . $_party . ', Reason: ' . $_reason, 'Commerce YandexKassa Payment (payment canceled)');
                 }
                 try {
-                    $processor->changeStatus($payment['metadata']['order_id'], $canceled_sid, 'Заказ отменён со стороны: ' . $party[$_party] . '. Причина: ' . $_reason . ', подробнее: ' . $reason_url, true);
+                    $processor->changeStatus($payment['metadata']['order_id'], $canceled_sid, $this->lang['yandexkassa.canceled_party'] . $this->lang['yandexkassa.'.$_party] . '. ' . $this->lang['yandexkassa.canceled_reason'] . $_reason . '. ' . $this->lang['yandexkassa.canceled_more'] . $reason_url, true);
                 } catch (\Exception $e) {
                     $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment (payment canceled error)');
                   return false;
