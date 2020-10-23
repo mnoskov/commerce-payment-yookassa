@@ -4,10 +4,13 @@ namespace Commerce\Payments;
 
 class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 {
+    protected $debug = false;
+
     public function __construct($modx, array $params = [])
     {
         parent::__construct($modx, $params);
         $this->lang = $modx->commerce->getUserLanguage('yandexkassa');
+        $this->debug = !empty($this->getSetting('debug'));
     }
 
     public function getMarkup()
@@ -33,20 +36,18 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
     public function getPaymentLink()
     {
-        $debug = !empty($this->getSetting('debug'));
-
         $processor = $this->modx->commerce->loadProcessor();
-        $order     = $processor->getOrder();
-        $fields    = $order['fields'];
-        $currency  = ci()->currency->getCurrency($order['currency']);
-        $payment   = $this->createPayment($order['id'], ci()->currency->convertToDefault($order['amount'], $currency['code']));
+        $order = $processor->getOrder();
+        $currency = ci()->currency->getCurrency($order['currency']);
+        $payment = $this->createPayment($order['id'],
+            ci()->currency->convertToDefault($order['amount'], $currency['code']));
 
         $data = [
-            'amount' => [
+            'amount'       => [
                 'value'    => number_format($order['amount'], 2, '.', ''),
                 'currency' => 'RUB',
             ],
-            'description' => ci()->tpl->parseChunk($this->lang['payments.payment_description'], [
+            'description'  => ci()->tpl->parseChunk($this->lang['payments.payment_description'], [
                 'order_id'  => $order['id'],
                 'site_name' => $this->modx->getConfig('site_name'),
             ]),
@@ -59,7 +60,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                 'payment_id'   => $payment['id'],
                 'payment_hash' => $payment['hash'],
             ],
-            'capture' => true,
+            'capture'      => true,
         ];
 
         if (!empty($order['phone']) || !empty($order['email'])) {
@@ -88,21 +89,23 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             $data['receipt'] = $receipt;
         }
 
-        if ($debug) {
-            $this->modx->logEvent(0, 1, 'Request data: ' . print_r($data, true), 'Commerce YandexKassa Payment Debug: payment start');
+        if ($this->debug) {
+            $this->modx->logEvent(0, 1, 'Request data: ' . print_r($data, true),
+                'Commerce YandexKassa Payment Debug: payment start');
         }
 
-        try {
-            if (($result = $this->request('payments', $data)) === false) {
-                exit();
+        if (($result = $this->request('payments', $data)) === false) {
+            if ($this->debug) {
+                $this->modx->logEvent(0, 3, 'Link is not received', 'Commerce YandexKassa Payment');
             }
-        } catch (\Exception $e) {
-            $this->modx->logEvent(0, 3, 'Link is not received: ' . $e->getMessage(), 'Commerce YandexKassa Payment');
-            exit();
+            $docid = $this->getSetting('payment_failed_page_id', $this->modx->getConfig('site_start'));
+            $url = $this->modx->makeUrl($docid);
+            $this->modx->sendRedirect($url);
         }
 
-        if ($debug) {
-            $this->modx->logEvent(0, 1, 'Response data: ' . print_r($result, true), 'Commerce YandexKassa Payment Debug: payment start');
+        if ($this->debug) {
+            $this->modx->logEvent(0, 1, 'Response data: ' . print_r($result, true),
+                'Commerce YandexKassa Payment Debug: payment start');
         }
 
         return $result['confirmation']['confirmation_url'];
@@ -110,68 +113,94 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
     public function handleCallback()
     {
-        $debug = !empty($this->getSetting('debug'));
         $processing_sid = !empty($this->getSetting('processing_status_id')) ? $this->getSetting('processing_status_id') : 2;
         $canceled_sid = !empty($this->getSetting('canceled_status_id')) ? $this->getSetting('canceled_status_id') : 5;
         $source = file_get_contents('php://input');
 
-        if ($debug) {
-            $this->modx->logEvent(0, 1, 'Callback data: ' . print_r($source, true), 'Commerce YandexKassa Payment Debug: callback start');
+        if ($this->debug) {
+            $this->modx->logEvent(0, 1, 'Callback data: ' . print_r($source, true),
+                'Commerce YandexKassa Payment Debug: callback start');
         }
 
         if (empty($source)) {
-            $this->modx->logEvent(0, 3, 'Empty data', 'Commerce YandexKassa Payment');
+            if ($this->debug) {
+                $this->modx->logEvent(0, 3, 'Empty data', 'Commerce YandexKassa Payment');
+            }
+
             return false;
         }
 
         $data = json_decode($source, true);
 
         if (empty($data) || empty($data['object'])) {
-            $this->modx->logEvent(0, 3, 'Invalid json', 'Commerce YandexKassa Payment');
+            if ($this->debug) {
+                $this->modx->logEvent(0, 3, 'Invalid json', 'Commerce YandexKassa Payment');
+            }
+
             return false;
         }
 
         $payment = $data['object'];
         $processor = $this->modx->commerce->loadProcessor();
         switch ($payment['status']) {
-            case 'succeeded': {
+            case 'succeeded':
+            {
                 if ($payment['paid'] === true) {
                     try {
-                      $processor->processPayment($payment['metadata']['payment_id'], floatval($payment['amount']['value']));
-                      // $this->modx->invokeEvent('OnPageNotFound', ['callback' => &$payment]); // если необходимо обработать возвращаемые данные, н-р, отправить API-запрос в CRM
+                        $processor->processPayment($payment['metadata']['payment_id'],
+                            floatval($payment['amount']['value']));
+                        // $this->modx->invokeEvent('OnPageNotFound', ['callback' => &$payment]); // если необходимо обработать возвращаемые данные, н-р, отправить API-запрос в CRM
                     } catch (\Exception $e) {
-                      $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment');
-                      return false;
+                        if ($this->debug) {
+                            $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(),
+                                'Commerce YandexKassa Payment');
+                        }
+
+                        return false;
                     }
                 }
-              break;
+                break;
             }
-            case 'waiting_for_capture': {
+            case 'waiting_for_capture':
+            {
                 $this->request('payments/' . $payment['id'] . '/capture', [
                     'amount' => $payment['amount'],
                 ]);
                 try {
-                  $processor->changeStatus($payment['metadata']['order_id'], $processing_sid, $this->lang['yandexkassa.waiting_for_capture']);
+                    $processor->changeStatus($payment['metadata']['order_id'], $processing_sid,
+                        $this->lang['yandexkassa.waiting_for_capture']);
                 } catch (\Exception $e) {
-                  $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment (changeStatus)');
-                  return false;
+                    if ($this->debug) {
+                        $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(),
+                            'Commerce YandexKassa Payment (changeStatus)');
+                    }
+
+                    return false;
                 }
-              break;
+                break;
             }
-            case 'canceled': {
+            case 'canceled':
+            {
                 $_party = $payment['cancellation_details']['party'];
                 $_reason = $payment['cancellation_details']['reason'];
                 $reason_url = "https://kassa.yandex.ru/developers/payments/declined-payments#cancellation-details-reason";
-                if ($debug) {
-                    $this->modx->logEvent(0, 1, 'Initiator: ' . $_party . ', Reason: ' . $_reason, 'Commerce YandexKassa Payment (payment canceled)');
+                if ($this->debug) {
+                    $this->modx->logEvent(0, 1, 'Initiator: ' . $_party . ', Reason: ' . $_reason,
+                        'Commerce YandexKassa Payment (payment canceled)');
                 }
                 try {
-                    $processor->changeStatus($payment['metadata']['order_id'], $canceled_sid, $this->lang['yandexkassa.canceled_party'] . $this->lang['yandexkassa.'.$_party] . '. ' . $this->lang['yandexkassa.canceled_reason'] . $_reason . '. ' . $this->lang['yandexkassa.canceled_more'] . $reason_url, true);
+                    $processor->changeStatus($payment['metadata']['order_id'], $canceled_sid,
+                        $this->lang['yandexkassa.canceled_party'] . $this->lang['yandexkassa.' . $_party] . '. ' . $this->lang['yandexkassa.canceled_reason'] . $_reason . '. ' . $this->lang['yandexkassa.canceled_more'] . $reason_url,
+                        true);
                 } catch (\Exception $e) {
-                    $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(), 'Commerce YandexKassa Payment (payment canceled error)');
-                  return false;
+                    if ($this->debug) {
+                        $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(),
+                            'Commerce YandexKassa Payment (payment canceled error)');
+                    }
+
+                    return false;
                 }
-              break;
+                break;
             }
         }
 
@@ -201,9 +230,9 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
     protected function request($method, $data = [])
     {
-        $url     = 'https://payment.yandex.net/api/v3/';
+        $url = 'https://payment.yandex.net/api/v3/';
         $shop_id = $this->getSetting('shop_id');
-        $secret  = $this->getSetting('secret');
+        $secret = $this->getSetting('secret');
 
         $curl = curl_init();
 
@@ -237,13 +266,16 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         $result = json_decode($result, true);
 
         if ($code != 200) {
-            if (isset($result['type']) && $result['type'] == 'error') {
-                $msg = 'Server return error:<br>' . print_r($result, true);
-            } else {
-                $msg = 'Server is not responding';
+            if ($this->debug) {
+                if (isset($result['type']) && $result['type'] == 'error') {
+                    $msg = 'Server return error:<br>' . print_r($result, true);
+                } else {
+                    $msg = 'Server is not responding';
+                }
+
+                $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment');
             }
 
-            $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment');
             return false;
         }
 
