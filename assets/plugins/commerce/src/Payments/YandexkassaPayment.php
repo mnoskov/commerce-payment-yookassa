@@ -98,9 +98,10 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             if ($this->debug) {
                 $this->modx->logEvent(0, 3, 'Link is not received', 'Commerce YandexKassa Payment');
             }
-            $docid = $this->getSetting('payment_failed_page_id', $this->modx->getConfig('site_start'));
+            $docid = $this->modx->commerce->getSetting('payment_failed_page_id', $this->modx->getConfig('site_start'));
             $url = $this->modx->makeUrl($docid);
-            $this->modx->sendRedirect($url);
+            
+            return $url;
         }
 
         if ($this->debug) {
