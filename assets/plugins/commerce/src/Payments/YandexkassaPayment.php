@@ -72,7 +72,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                     'vat_code'    => $this->getSetting('vat_code'),
                     'quantity'    => $item['count'],
                     'amount'      => [
-                        'value'    => number_format($item['price'] * $item['count'], 2, '.', ''),
+                        'value'    => number_format($item['price'], 2, '.', ''),
                         'currency' => 'RUB',
                     ],
                 ];
@@ -90,7 +90,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         }
 
         if ($this->debug) {
-            $this->modx->logEvent(0, 1, 'Request data: ' . print_r($data, true),
+            $this->modx->logEvent(0, 1, 'Request data: <pre>' . print_r($data, true) . '</pre>',
                 'Commerce YandexKassa Payment Debug: payment start');
         }
 
@@ -100,14 +100,10 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             }
             $docid = $this->modx->commerce->getSetting('payment_failed_page_id', $this->modx->getConfig('site_start'));
             $url = $this->modx->makeUrl($docid);
-            
+
             return $url;
         }
 
-        if ($this->debug) {
-            $this->modx->logEvent(0, 1, 'Response data: ' . print_r($result, true),
-                'Commerce YandexKassa Payment Debug: payment start');
-        }
 
         return $result['confirmation']['confirmation_url'];
     }
@@ -119,7 +115,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         $source = file_get_contents('php://input');
 
         if ($this->debug) {
-            $this->modx->logEvent(0, 1, 'Callback data: ' . print_r($source, true),
+            $this->modx->logEvent(0, 1, 'Callback data: <pre>' . print_r($source, true) . '</pre>',
                 'Commerce YandexKassa Payment Debug: callback start');
         }
 
@@ -265,7 +261,6 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         curl_close($curl);
 
         $result = json_decode($result, true);
-
         if ($code != 200) {
             if ($this->debug) {
                 if (isset($result['type']) && $result['type'] == 'error') {
@@ -273,11 +268,15 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                 } else {
                     $msg = 'Server is not responding';
                 }
-
-                $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment');
+                $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment Response');
             }
 
             return false;
+        } else {
+            if ($this->debug) {
+                $msg = 'Response:<pre>' . print_r($result, true) . '</pre>';
+                $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment Response');
+            }
         }
 
         return $result;
