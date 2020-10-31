@@ -41,7 +41,6 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         $currency = ci()->currency->getCurrency($order['currency']);
         $payment = $this->createPayment($order['id'],
             ci()->currency->convertToDefault($order['amount'], $currency['code']));
-        $cart = $processor->getCart();
 
         $data = [
             'amount'       => [
@@ -67,25 +66,9 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         if (!empty($order['phone']) || !empty($order['email'])) {
             $receipt = ['items' => []];
 
-            foreach ($cart->getItems() as $item) {
+            foreach ($processor->getCart()->getItems() as $item) {
                 $receipt['items'][] = [
                     'description' => mb_substr($item['name'], 0, 64),
-                    'vat_code'    => $this->getSetting('vat_code'),
-                    'quantity'    => $item['count'],
-                    'amount'      => [
-                        'value'    => number_format($item['price'], 2, '.', ''),
-                        'currency' => 'RUB',
-                    ],
-                ];
-            }
-
-            $subtotals = [];
-            $subtotal = 0;
-            $cart->getSubtotals($subtotals, $subtotal);
-
-            foreach ($subtotals as $item) {
-                $receipt['items'][] = [
-                    'description' => mb_substr($item['title'], 0, 64),
                     'vat_code'    => $this->getSetting('vat_code'),
                     'quantity'    => $item['count'],
                     'amount'      => [
