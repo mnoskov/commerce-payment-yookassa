@@ -2,6 +2,8 @@
 
 namespace Commerce\Payments;
 
+use Exception;
+
 class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 {
     protected $debug = false;
@@ -45,7 +47,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
         $data = [
             'amount'       => [
-                'value'    => number_format($order['amount'], 2, '.', ''),
+                'value'    => number_format($payment['amount'], 2, '.', ''),
                 'currency' => 'RUB',
             ],
             'description'  => ci()->tpl->parseChunk($this->lang['payments.payment_description'], [
@@ -67,13 +69,20 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         if (!empty($order['phone']) || !empty($order['email'])) {
             $receipt = ['items' => []];
             $items = $this->prepareItems($cart);
+
+            $isPartialPayment = $payment['amount'] < $order['amount'];
+
+            if ($isPartialPayment) {
+                $items = $this->decreaseItemsAmount($items, $order['amount'], $payment['amount']);
+            }
+
             foreach ($items as $item) {
                 $receipt['items'][] = [
                     'description' => mb_substr($item['name'], 0, 64),
                     'vat_code'    => $this->getSetting('vat_code'),
                     'quantity'    => $item['count'],
                     'amount'      => [
-                        'value'    => number_format($item['price'], 2, '.', ''),
+                        'value'    => $item['price'],
                         'currency' => 'RUB',
                     ],
                 ];
@@ -148,7 +157,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                         $processor->processPayment($payment['metadata']['payment_id'],
                             floatval($payment['amount']['value']));
                         // $this->modx->invokeEvent('OnPageNotFound', ['callback' => &$payment]); // если необходимо обработать возвращаемые данные, н-р, отправить API-запрос в CRM
-                    } catch (\Exception $e) {
+                    } catch (Exception $e) {
                         if ($this->debug) {
                             $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(),
                                 'Commerce YandexKassa Payment');
@@ -167,7 +176,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
                 try {
                     $processor->changeStatus($payment['metadata']['order_id'], $processing_sid,
                         $this->lang['yandexkassa.waiting_for_capture']);
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     if ($this->debug) {
                         $this->modx->logEvent(0, 3, 'JSON processing failed: ' . $e->getMessage(),
                             'Commerce YandexKassa Payment (changeStatus)');
