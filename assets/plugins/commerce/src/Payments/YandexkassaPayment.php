@@ -237,7 +237,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
     protected function request($method, $data = [])
     {
-        $url = 'https://payment.yandex.net/api/v3/';
+        $url = 'https://api.yookassa.ru/v3/';
         $shop_id = $this->getSetting('shop_id');
         $secret = $this->getSetting('secret');
 
