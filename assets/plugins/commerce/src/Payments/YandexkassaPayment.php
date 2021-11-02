@@ -67,7 +67,11 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         ];
 
         if (!empty($order['phone']) || !empty($order['email'])) {
-            $receipt = ['items' => []];
+            $receipt = [
+                'items' => [],
+                'customer' => [],
+            ];
+
             $items = $this->prepareItems($cart);
 
             $isPartialPayment = $payment['amount'] < $order['amount'];
@@ -78,7 +82,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
 
             foreach ($items as $item) {
                 $receipt['items'][] = [
-                    'description' => mb_substr($item['name'], 0, 64),
+                    'description' => mb_substr($item['name'], 0, 128),
                     'vat_code'    => $this->getSetting('vat_code'),
                     'quantity'    => $item['count'],
                     'amount'      => [
@@ -89,11 +93,16 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
             }
 
             if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
-                $receipt['email'] = $order['email'];
+                $receipt['customer']['email'] = $order['email'];
             }
+
             if (!empty($order['phone'])) {
-                $receipt['phone'] = substr(preg_replace('/[^\d]+/', '', $order['phone']), 0, 15);
+                $phone = preg_replace('/[^\d]+/', '', $order['phone']);
+                $phone = preg_replace('/^8/', '7', $phone);
+                $phone = substr($phone, 0, 15);
+                $receipt['customer']['phone'] = $phone;
             }
+
             $receipt['tax_system_code'] = $this->getSetting('tax_system_code');
 
             $data['receipt'] = $receipt;
@@ -285,7 +294,7 @@ class YandexkassaPayment extends Payment implements \Commerce\Interfaces\Payment
         } else {
             if ($this->debug) {
                 $msg = 'Response:<pre>' . print_r($result, true) . '</pre>';
-                $this->modx->logEvent(0, 3, $msg, 'Commerce YandexKassa Payment Response');
+                $this->modx->logEvent(0, 1, $msg, 'Commerce YandexKassa Payment Response');
             }
         }
 
